@@ -1,3 +1,4 @@
+
 // src/components/onboarding/BankDetails.tsx - FIXED VERSION WITH PROPER TYPES
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -181,7 +182,7 @@ export const BankDetails: React.FC<BankDetailsProps> = ({
             const { error: insertError } = await supabase
                 .from('merchant_documents')
                 .insert({
-                    merchant_id: merchantProfile.id,
+                    merchant_id: merchantProfile.id as string,
                     document_type: 'cancelled_cheque',
                     file_name: file.name,
                     file_path: filePath,

@@ -271,16 +271,16 @@ export const KYCVerification: React.FC<KYCVerificationProps> = ({
                                 <div className="p-3 bg-card rounded-lg">
                                     <span className="font-medium">PAN Number:</span>
                                     <span className="ml-2 text-primary">
-                                        {data?.panNumber || merchantProfile?.pan_number || 'Processing...'}
+                                        {(data?.panNumber as string) || (merchantProfile?.pan_number as string) || 'Processing...'}
                                     </span>
                                 </div>
                                 <div className="p-3 bg-card rounded-lg">
                                     <span className="font-medium">Aadhaar:</span>
                                     <span className="ml-2 text-primary">
-                                        {data?.aadhaarNumber ?
+                                        {data?.aadhaarNumber && typeof data.aadhaarNumber === 'string' ?
                                             `****-****-${data.aadhaarNumber.slice(-4)}` :
-                                            merchantProfile?.aadhaar_number ?
-                                                `****-****-${merchantProfile.aadhaar_number.slice(-4)}` :
+                                            (merchantProfile?.aadhaar_number as string) ?
+                                                `****-****-${(merchantProfile.aadhaar_number as string).slice(-4)}` :
                                                 'Processing...'
                                         }
                                     </span>
