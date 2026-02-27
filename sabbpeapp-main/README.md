@@ -50,6 +50,29 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## Environment Variables
+
+The frontend relies on a handful of `VITE_`-prefixed variables in `.env.local` at the project root. Vite exposes only values starting with `VITE_` to the browser – if you forget the prefix the app will crash during startup and result in a blank page.
+
+Example values you must provide (replace with real secrets/URLs):
+
+```env
+VITE_SUPABASE_URL=https://xyz.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key          # 👈 DO NOT leave the placeholder text "REPLACE_WITH_PROJECT_ANON_KEY"
+VITE_API_URL=https://onboardinguatbckend.sabbpe.com   # no need to include trailing `/api`; the client adds it automatically
+# other keys used by client code:
+# VITE_GOOGLE_VISION_API_KEY=
+# VITE_MSG91_AUTHKEY=
+```
+
+> ⚠️ **Important:** The default `.env.local` shipped with this repo contains a literal
+> `REPLACE_WITH_PROJECT_ANON_KEY` string. If you forget to substitute a real
+> anon key the app will run but every auth/DB request will fail with "Invalid
+> API key". The development build now throws an error at startup when the
+> placeholder is detected so you can’t accidentally proceed with a bogus value.
+
+Do **not** expose service‑role keys or other sensitive server secrets in any `VITE_` variable; those belong in backend-only environment variables (no prefix).
+
 ## What technologies are used for this project?
 
 This project is built with:

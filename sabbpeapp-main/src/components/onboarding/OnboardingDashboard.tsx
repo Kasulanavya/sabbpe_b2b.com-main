@@ -288,6 +288,36 @@ export const OnboardingDashboard: React.FC = () => {
                                     <Mail className="h-4 w-4 mr-2" />
                                     Email Support
                                 </Button>
+                                <Button
+                                                                    variant="outline"
+                                                                    className="w-full justify-start"
+                                                                    style={{ color: '#25D366', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                                                                    onClick={() => {
+                                                                        const message = `Hello SabPe Support Team,\n\nI am currently in the process of completing my merchant onboarding application and have encountered an issue that is preventing me from proceeding further.\n\nI have carefully reviewed the information provided, but I am still unable to resolve the problem on my own. I kindly request your assistance in guiding me through the necessary steps to complete the onboarding successfully.\n\nPlease let me know the required actions or documents, if any.\n\nThank you for your time and support.`;
+                                                                        const encodedMessage = encodeURIComponent(message);
+                                                                        const whatsappUrl = `https://wa.me/919958750013?text=${encodedMessage}`;
+                                                                        window.open(whatsappUrl, '_blank');
+                                                                    }}
+                                                                >
+                                                                    <svg style={{marginRight: 8}} xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="#25D366" d="M12 2C6.477 2 2 6.477 2 12c0 1.85.504 3.59 1.38 5.08L2.05 22.05l5.08-1.33A9.953 9.953 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2Zm0 18a7.952 7.952 0 0 1-4.07-1.13l-.29-.17-3.02.79.8-2.95-.18-.3A7.963 7.963 0 1 1 20 12c0 4.418-3.582 8-8 8Zm4.29-5.71c-.2-.1-1.18-.58-1.36-.65-.18-.07-.31-.1-.44.1-.13.2-.5.65-.62.78-.12.13-.23.15-.43.05-.2-.1-.84-.31-1.6-.98-.59-.53-.99-1.18-1.11-1.38-.12-.2-.01-.3.09-.4.09-.09.2-.23.3-.34.1-.11.13-.19.2-.32.07-.13.04-.24-.02-.34-.06-.1-.44-1.06-.6-1.45-.16-.39-.32-.34-.44-.35-.11-.01-.24-.01-.37-.01-.13 0-.34.05-.52.24.-.18.19-.7.68-.7 1.66 0 .98.72 1.93.82 2.07.1.14 1.41 2.16 3.42 2.95.48.17.85.27 1.14.34.48.1.92.09 1.27.06.39-.04 1.18-.48 1.35-.94.17-.46.17-.85.12-.94.-.05-.09-.18.-.13.-.38.-.23Z"/></svg>
+                                                                        WhatsApp Support
+                                                                </Button>
+                                {/* WhatsApp Help at the bottom of every step */}
+                                <div style={{marginTop: '2rem', textAlign: 'center'}}>
+                                    <p style={{fontWeight: 500, marginBottom: 8}}>Need Help on WhatsApp?</p>
+                                    <button
+                                        onClick={() => {
+                                            const message = `Hello SabPe Support Team,\n\nI am currently in the process of completing my merchant onboarding application and have encountered an issue that is preventing me from proceeding further.\n\nI have carefully reviewed the information provided, but I am still unable to resolve the problem on my own. I kindly request your assistance in guiding me through the necessary steps to complete the onboarding successfully.\n\nPlease let me know the required actions or documents, if any.\n\nThank you for your time and support.`;
+                                            const encodedMessage = encodeURIComponent(message);
+                                            const whatsappUrl = `https://wa.me/919958750013?text=${encodedMessage}`;
+                                            window.open(whatsappUrl, '_blank');
+                                        }}
+                                        style={{color: '#25D366', fontWeight: 600, fontSize: 16, border: 'none', background: 'transparent', cursor: 'pointer'}}
+                                    >
+                                        Chat with SabPe Support
+                                    </button>
+                                </div>
+
 
                                 <div className="pt-3 border-t">
                                     <div className="text-sm">
