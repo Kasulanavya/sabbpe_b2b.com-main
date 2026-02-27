@@ -208,18 +208,13 @@ export const getTickets = async (req, res) => {
       .from("tickets")
       .select("*", { count: "exact" });
 
-    // Restrict support to assigned tickets only
+    // Support users see only assigned tickets
     if (!(userRole === "super_admin" || userRole === "admin")) {
       query = query.eq("assigned_to", userId);
     }
 
-    if (status) {
-      query = query.eq("status", status);
-    }
-
-    if (module && allowedModules.includes(module)) {
-      query = query.eq("module", module);
-    }
+    if (status) query = query.eq("status", status);
+    if (module) query = query.eq("module", module);
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
@@ -230,11 +225,30 @@ export const getTickets = async (req, res) => {
 
     if (error) throw error;
 
+    // 🔥 Add last message info for notification
+    const ticketsWithMessages = await Promise.all(
+      data.map(async (ticket) => {
+        const { data: lastMessage } = await supabase
+          .from("ticket_messages")
+          .select("sender_role, created_at")
+          .eq("ticket_id", ticket.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        return {
+          ...ticket,
+          last_message_role: lastMessage?.sender_role || null,
+          last_message_at: lastMessage?.created_at || null,
+        };
+      })
+    );
+
     res.json({
       total: count,
       page: Number(page),
       pages: Math.ceil(count / limit),
-      tickets: data,
+      tickets: ticketsWithMessages,
     });
   } catch (error) {
     console.error("Get tickets error:", error);
@@ -271,74 +285,7 @@ export const assignTicket = async (req, res) => {
 /* ========================================
    UPDATE STATUS (STRICT WORKFLOW + EMAIL)
 ======================================== */
-// export const updateTicketStatus = async (req, res) => {
-//   try {
-//     const { ticketId, status } = req.body;
 
-//     const { data: ticket } = await supabase
-//       .from("tickets")
-//       .select("*")
-//       .eq("id", ticketId)
-//       .single();
-
-//     if (!ticket) {
-//       return res.status(404).json({ message: "Ticket not found" });
-//     }
-
-//     const allowedTransitions = {
-//       open: ["assigned"],
-//       assigned: ["in_progress"],
-//       in_progress: ["resolved"],
-//       resolved: ["closed"],
-//       closed: [],
-//     };
-
-//     if (!allowedTransitions[ticket.status].includes(status)) {
-//       return res.status(400).json({
-//         message: `Invalid transition from ${ticket.status} to ${status}`,
-//       });
-//     }
-
-//     const { data: updated, error } = await supabase
-//       .from("tickets")
-//       .update({
-//         status,
-//         updated_at: new Date().toISOString(),
-//       })
-//       .eq("id", ticketId)
-//       .select()
-//       .single();
-
-//     if (error) throw error;
-
-//     // 🔹 Notify merchant on status change
-//     const { data: merchant } = await supabase
-//       .from("merchant_profiles")
-//       .select("email, full_name")
-//       .eq("user_id", ticket.created_by)
-//       .single();
-
-//     if (merchant?.email) {
-//       await sendEmail(
-//         merchant.email,
-//         "Your Ticket Status Has Been Updated",
-//         `
-//         <div style="font-family: Arial; padding: 20px;">
-//           <h2>Hello ${merchant.full_name || "Customer"},</h2>
-//           <p>Your ticket status has been updated.</p>
-//           <p><strong>New Status:</strong> ${status}</p>
-//           <br/>
-//           <p>SabbPe Support Team</p>
-//         </div>
-//         `
-//       );
-//     }
-
-//     res.json(updated);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 export const updateTicketStatus = async (req, res) => {
   try {
@@ -527,16 +474,16 @@ export const reviewMerchant = async (req, res) => {
     /* ==============================
        2️⃣ Update Merchant Profile
     =============================== */
-    const { error: updateError } = await supabase
-      .from("merchant_profiles")
-      .update({
-        approval_status: status,
-        review_notes,
-        reviewed_by: req.user.id,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq("user_id", merchant_id);
-
+ 
+const { error: updateError } = await supabase
+  .from("merchant_profiles")
+  .update({
+    onboarding_status: status,   // 👈 VERY IMPORTANT
+    rejection_reason: status === "rejected" ? review_notes : null,
+    reviewed_by: req.user.id,
+    reviewed_at: new Date().toISOString(),
+  })
+  .eq("user_id", merchant_id);
     if (updateError) throw updateError;
 
     /* ==============================

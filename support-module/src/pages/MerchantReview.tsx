@@ -12,6 +12,7 @@ interface MerchantProfile {
   pan_number: string;
   aadhaar_number: string;
   gst_number?: string;
+  verification_submitted?: boolean;   
 }
 
 interface MerchantDocument {
@@ -220,27 +221,27 @@ const MerchantReview: React.FC = () => {
           Back
         </button>
       </div>
-
-      {/* ✅ Wrapped Approve/Reject */}
       {(user?.role === "admin" || user?.role === "super_admin") && (
-        <>
-          <div className="flex gap-4 mt-6">
-            <button
-              onClick={handleApprove}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg"
-            >
-              Approve
-            </button>
+  <div className="flex gap-4 mt-6">
 
-            <button
-              onClick={handleReject}
-              className="px-6 py-2 bg-red-600 text-white rounded-lg"
-            >
-              Reject
-            </button>
-          </div>
-        </>
-      )}
+    {profile?.verification_submitted === true && (
+      <button
+        onClick={handleApprove}
+        className="px-6 py-2 bg-green-600 text-white rounded-lg"
+      >
+        Approve
+      </button>
+    )}
+
+    <button
+      onClick={handleReject}
+      className="px-6 py-2 bg-red-600 text-white rounded-lg"
+    >
+      Reject
+    </button>
+
+  </div>
+)}
     </div>
   );
 };
