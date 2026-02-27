@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { sendInviteViaWhatsApp, sendInviteViaSms } from '../services/inviteService';
+import { sendMerchantInvite } from '../services/inviteService';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -40,7 +40,7 @@ interface BulkInviteRequest {
 /**
  * POST /api/invites/bulk-send
  * 
- * Send onboarding invites to multiple merchants via WhatsApp
+ * Send onboarding invites to multiple merchants via SMS
  * Each merchant gets a unique onboarding link they can click to start the flow
  * 
  * Request body:
@@ -104,7 +104,16 @@ router.post(
                 return;
             }
 
-            console.log(`📧 Sending ${merchants.length} invites for distributor ${distributor.id}`);
+            // Get distributor's name and email
+            const { data: distributorData } = await admin
+                .from('users')
+                .select('email, full_name')
+                .eq('id', distributor.id)
+                .maybeSingle();
+
+            const distributorName = distributorData?.full_name || distributorData?.email?.split('@')[0] || 'SabbPe';
+
+            console.log(`📧 Sending ${merchants.length} invites for distributor ${distributor.id} (${distributorName})`);
 
             const results: any[] = [];
             let sent = 0;
@@ -124,25 +133,41 @@ router.post(
                         continue;
                     }
 
+                    // Format and validate mobile number
+                    let formattedMobile = merchant.mobileNumber.trim();
+                    if (!formattedMobile.startsWith('91')) {
+                        if (formattedMobile.length === 10) {
+                            formattedMobile = '91' + formattedMobile;
+                        } else if (!formattedMobile.startsWith('+91')) {
+                            results.push({
+                                email: merchant.email,
+                                status: 'failed',
+                                error: 'Invalid mobile number format. Please provide a valid 10-digit number or number starting with 91'
+                            });
+                            failed++;
+                            continue;
+                        }
+                    }
+
                     // Generate unique invite token
                     const inviteToken = crypto.randomUUID();
                     const fullFrontendUrl = normalizeFrontendUrl(process.env.VITE_FRONTEND_URL);
                     const inviteLink = `${fullFrontendUrl}/invite/${inviteToken}`;
 
-                    // Store invite in DB (don't set status yet - will be determined after WhatsApp send)
+                    // Store invite in DB with status 'sent' (will be updated if SMS fails)
                     const { data: inviteData, error: inviteError } = await admin
                         .from('merchant_invitations')
                         .insert({
                             distributor_id: distributor.id,
                             merchant_email: merchant.email,
                             merchant_name: merchant.fullName,
-                            merchant_mobile: merchant.mobileNumber,
+                            merchant_mobile: formattedMobile,
                             business_name: merchant.businessName || null,
                             invitation_token: inviteToken,
                             invite_token: inviteToken,
                             invite_link: inviteLink,
-                            status: 'sent',  // Set to 'sent' initially, will remain or be updated to 'failed_to_send'
-                            sent_via: 'whatsapp', // default since we attempt WhatsApp first
+                            status: 'sent',
+                            sent_via: 'sms',
                             sent_at: new Date().toISOString()
                         })
                         .select()
@@ -159,25 +184,20 @@ router.post(
                         continue;
                     }
 
-                    // Try WhatsApp message first
-                    let whatsappResult = await sendInviteViaWhatsApp(
-                        merchant.mobileNumber,
-                        merchant.fullName,
-                        inviteLink
+                    // Send SMS invite with formatted mobile number
+                    const smsResult = await sendMerchantInvite(
+                        formattedMobile,
+                        inviteLink,
+                        distributorName,
+                        merchant.fullName
                     );
 
-                    // if WA claim success but no ID returned, treat as failed so we can fallback
-                    if (whatsappResult.success && !whatsappResult.messageId) {
-                        console.warn(`⚠️ WhatsApp send returned no messageId; falling back to SMS for ${merchant.mobileNumber}`);
-                        whatsappResult = { success: false, error: 'no messageId returned' };
-                    }
-
-                    if (whatsappResult.success) {
+                    if (smsResult.success) {
                         await admin
                             .from('merchant_invitations')
                             .update({
-                                whatsapp_message_id: whatsappResult.messageId || null,
-                                sent_via: 'whatsapp',
+                                status: 'sent',
+                                sms_message_id: smsResult.messageId || null,
                                 updated_at: new Date().toISOString()
                             })
                             .eq('id', inviteData.id);
@@ -186,61 +206,33 @@ router.post(
                             email: merchant.email,
                             inviteToken,
                             status: 'sent',
-                            via: 'whatsapp',
-                            messageId: whatsappResult.messageId
+                            via: 'sms',
+                            messageId: smsResult.messageId
                         });
                         sent++;
 
-                        console.log(`✅ Invite sent to ${merchant.email} (${merchant.mobileNumber}) via WhatsApp`);
+                        console.log(`✅ Invite SMS sent to ${merchant.email} (${formattedMobile})`);
                     } else {
-                        console.warn(`⚠️ WhatsApp failed for ${merchant.mobileNumber}:`, whatsappResult.error);
-                        // fallback to SMS
-                        const smsResult = await sendInviteViaSms(
-                            merchant.mobileNumber,
-                            inviteLink,
-                            merchant.fullName
-                        );
-
-                        if (smsResult.success) {
-                            await admin
-                                .from('merchant_invitations')
-                                .update({
-                                    sent_via: 'sms',
-                                    updated_at: new Date().toISOString()
-                                })
-                                .eq('id', inviteData.id);
-
-                            results.push({
-                                email: merchant.email,
-                                inviteToken,
-                                status: 'sent',
-                                via: 'sms',
-                                messageId: smsResult.messageId
-                            });
-                            sent++;
-
-                            console.log(`✅ Invite sent to ${merchant.email} (${merchant.mobileNumber}) via SMS`);
-                        } else {
-                            console.error('❌ SMS fallback also failed:', smsResult);
-                            await admin
-                                .from('merchant_invitations')
-                                .update({
-                                    status: 'failed_to_send',
-                                    send_error: whatsappResult.error + ' / ' + smsResult.error,
-                                    updated_at: new Date().toISOString()
-                                })
-                                .eq('id', inviteData.id);
-
-                            results.push({
-                                email: merchant.email,
-                                inviteToken,
+                        console.error(`❌ SMS invitation failed for ${merchant.email}:`, smsResult.error);
+                        
+                        await admin
+                            .from('merchant_invitations')
+                            .update({
                                 status: 'failed_to_send',
-                                error: whatsappResult.error
-                            });
-                            failed++;
+                                send_error: smsResult.error || 'Unknown error',
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', inviteData.id);
 
-                            console.error(`❌ Both WhatsApp and SMS failed for ${merchant.email}:`, whatsappResult.error, smsResult.error);
-                        }
+                        results.push({
+                            email: merchant.email,
+                            inviteToken,
+                            status: 'failed_to_send',
+                            error: smsResult.error
+                        });
+                        failed++;
+
+                        console.error(`❌ Failed to send SMS invite to ${merchant.email}:`, smsResult.error);
                     }
                 } catch (err) {
                     console.error(`❌ Error processing merchant ${merchant.email}:`, err);

@@ -7,6 +7,8 @@ import { useFileUpload } from '@/hooks/useFileUpload';
 import { useMerchantData } from '@/hooks/useMerchantData';
 import { useToast } from '@/hooks/use-toast';
 import { FaceVoiceSync } from './FaceVoiceSync'; // Make sure this path is correct
+ import { RaiseTicketButton } from "@/components/RaiseTicketButton";
+  import { useNavigate } from "react-router-dom";
 
 interface KYCVerificationProps {
     onNext: () => void;
@@ -58,6 +60,7 @@ export const KYCVerification: React.FC<KYCVerificationProps> = ({
     // Use prop-passed merchant profile if available (for distributor onboarding flow), otherwise use DB fetch
     const merchantProfile = propMerchantProfile || dbMerchantProfile;
     const { uploadFile } = useFileUpload();
+     const navigate = useNavigate();
     const {
         kycState,
         captureLocation,
@@ -575,6 +578,11 @@ export const KYCVerification: React.FC<KYCVerificationProps> = ({
                         </div>
                     </CardContent>
                 </Card>
+                <RaiseTicketButton
+            module="settlement"
+                 referenceId={merchantProfile?.id as string}
+               />
+
 
                 {/* Navigation Buttons */}
                 <div className="flex justify-between mt-4">

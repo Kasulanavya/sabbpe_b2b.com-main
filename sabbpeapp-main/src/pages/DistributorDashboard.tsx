@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Calendar, Users, CheckCircle, XCircle, MessageSquare, Settings, LogOut, Menu, X, Upload, CreditCard } from 'lucide-react';
+import { Calendar, Users, CheckCircle, XCircle, MessageSquare, Settings, LogOut, Menu, X, Upload, CreditCard, Loader2 } from 'lucide-react';
 
 type PayoutConfig = {
     settlement_frequency: string;
@@ -177,7 +177,7 @@ export default function DistributorDashboard() {
                 .from('merchant_invitations')
                 .select('*')
                 .eq('distributor_id', distributorId)
-                .order('created_at', { ascending: false });
+                .order('sent_at', { ascending: false });
 
             if (error) throw error;
             setInvitationsList(data || []);
@@ -344,33 +344,57 @@ export default function DistributorDashboard() {
             }
 
             setSending(true);
-            const inviteToken = crypto.randomUUID();
-            const frontendUrl = normalizeFrontendUrl(import.meta.env.VITE_FRONTEND_URL as string | undefined || window.location.origin);
-            const inviteLink = `${frontendUrl}/invite/${inviteToken}`;
 
-            const { error } = await supabase.from('merchant_invitations').insert([
-                {
-                    distributor_id: distributorId,
-                    merchant_name: inviteData.name,
-                    merchant_mobile: inviteData.mobile,
-                    merchant_email: inviteData.email,
-                    invitation_token: inviteToken,
-                    invite_token: inviteToken,
-                    invite_link: inviteLink,
-                    status: 'sent',
-                    sent_at: new Date().toISOString()
+            // Get auth token
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
+            if (!token) {
+                toast({
+                    title: 'Error',
+                    description: 'Not authenticated',
+                    variant: 'destructive',
+                });
+                setSending(false);
+                return;
+            }
+
+            // Call backend API to send SMS invite
+            const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/api\/?$/, '');
+            const response = await fetch(`${apiUrl}/api/invites/bulk-send`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 },
-            ]);
+                body: JSON.stringify({
+                    merchants: [{
+                        fullName: inviteData.name,
+                        mobileNumber: inviteData.mobile,
+                        email: inviteData.email
+                    }]
+                })
+            });
 
-            if (error) throw error;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || 'Failed to send invitation');
+            }
+
+            const result = await response.json();
 
             toast({
                 title: 'Success',
-                description: `Invitation created and stored. Use the bulk invite feature to send via WhatsApp, or share this link: ${inviteLink}`,
+                description: `Invitation sent to ${inviteData.email} via SMS!`,
             });
 
             setInviteDialogOpen(false);
             setInviteData({ name: '', mobile: '', email: '' });
+
+            // Refresh invitations list
+            if (activeTab === 'invitations') {
+                fetchInvitations();
+            }
         } catch (error) {
             console.error('Error sending invitation:', error);
             toast({
@@ -381,7 +405,7 @@ export default function DistributorDashboard() {
         } finally {
             setSending(false);
         }
-    }, [inviteData, distributorId, toast]);
+    }, [inviteData, activeTab, fetchInvitations, toast]);
 
     // Handle bulk invite
     // Handle CSV file selection
@@ -450,13 +474,13 @@ export default function DistributorDashboard() {
                 .map((line, idx) => {
                     const cols = line.split(',').map(c => c.trim());
                     return {
-                        name: cols[nameIndex]?.trim() || '',
-                        mobile: cols[mobileIndex]?.trim() || '',
+                        fullName: cols[nameIndex]?.trim() || '',
+                        mobileNumber: cols[mobileIndex]?.trim() || '',
                         email: cols[emailIndex]?.trim() || '',
                         rowIndex: idx + 2 // Line number in file (accounting for header)
                     };
                 })
-                .filter(m => m.name && m.mobile && m.email);
+                .filter(m => m.fullName && m.mobileNumber && m.email);
 
             if (merchants.length === 0) {
                 toast({
@@ -468,37 +492,53 @@ export default function DistributorDashboard() {
                 return;
             }
 
-            // Create invitations in database
-            const invitations = merchants.map(m => ({
-                distributor_id: distributorId,
-                merchant_name: m.name,
-                merchant_mobile: m.mobile,
-                merchant_email: m.email,
-                invitation_token: crypto.randomUUID(),
-                invite_token: crypto.randomUUID(),
-                invite_link: `${window.location.origin}/invite/${crypto.randomUUID()}`,
-                status: 'sent',
-                sent_at: new Date().toISOString()
-            }));
+            // Call backend API to send SMS invites
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
 
-            const { data, error: insertError } = await supabase
-                .from('merchant_invitations')
-                .insert(invitations)
-                .select();
+            if (!token) {
+                toast({
+                    title: 'Error',
+                    description: 'Not authenticated',
+                    variant: 'destructive',
+                });
+                setBulkInviteSending(false);
+                return;
+            }
 
-            if (insertError) throw insertError;
+            const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/api\/?$/, '');
+            const response = await fetch(`${apiUrl}/api/invites/bulk-send`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ merchants })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || 'Failed to send invitations');
+            }
+
+            const result = await response.json();
 
             toast({
                 title: 'Success',
-                description: `Created ${data?.length || merchants.length} merchant invitations from CSV`,
+                description: `Sent ${result.sent} invitations via SMS. ${result.failed} failed.`,
             });
 
             setBulkInviteCSVFile(null);
             // Reset file input
             const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
             if (fileInput) fileInput.value = '';
+
+            // Refresh invitations list
+            if (activeTab === 'invitations') {
+                fetchInvitations();
+            }
         } catch (error) {
-            console.error('❌ Bulk CSV invite error:', error);
+            console.error('❌ Bulk invite error:', error);
             toast({
                 title: 'Error',
                 description: getErrorMessage(error),
@@ -507,7 +547,7 @@ export default function DistributorDashboard() {
         } finally {
             setBulkInviteSending(false);
         }
-    }, [bulkInviteCSVFile, distributorId, toast]);
+    }, [bulkInviteCSVFile, activeTab, fetchInvitations, toast]);
 
     // Handle payout configuration
     const handleSavePayoutConfig = useCallback(async () => {
@@ -1155,7 +1195,7 @@ PQR Shop,9123456789,pqr@example.com`}
                                                                     {invitation.status.charAt(0).toUpperCase() + invitation.status.slice(1)}
                                                                 </span>
                                                             </td>
-                                                            <td className="py-3 px-4 text-gray-600">{new Date(invitation.sent_at || invitation.created_at).toLocaleString()}</td>
+                                                            <td className="py-3 px-4 text-gray-600">{invitation.sent_at ? new Date(invitation.sent_at).toLocaleString() : 'N/A'}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
