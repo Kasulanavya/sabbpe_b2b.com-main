@@ -30,7 +30,7 @@ export const sendInviteViaWhatsApp = async (
   let formattedNumber = mobileNumber.trim();
   if (!formattedNumber.startsWith('+')) {
     if (!formattedNumber.startsWith('91')) {
-      formattedNumber = '91' + formattedNumber; // India country code
+      formattedNumber = '91' + formattedNumber; 
     }
     formattedNumber = '+' + formattedNumber;
   }

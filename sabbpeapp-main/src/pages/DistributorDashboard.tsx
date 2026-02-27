@@ -59,6 +59,10 @@ export default function DistributorDashboard() {
     const [bulkInviteSending, setBulkInviteSending] = useState(false);
     const [bulkInviteResults, setBulkInviteResults] = useState<any>(null);
 
+    // Invitations list states
+    const [invitationsList, setInvitationsList] = useState<any[]>([]);
+    const [invitationsLoading, setInvitationsLoading] = useState(false);
+
     // Create Merchant form states
     const [createMerchantForm, setCreateMerchantForm] = useState({
         full_name: '',
@@ -163,6 +167,31 @@ export default function DistributorDashboard() {
             setLoading(false);
         }
     }, [navigate, toast]);
+
+    // Fetch invitations list
+    const fetchInvitations = useCallback(async () => {
+        if (!distributorId) return;
+        try {
+            setInvitationsLoading(true);
+            const { data, error } = await supabase
+                .from('merchant_invitations')
+                .select('*')
+                .eq('distributor_id', distributorId)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setInvitationsList(data || []);
+        } catch (error) {
+            console.error('Error fetching invitations:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to load invitations',
+                variant: 'destructive',
+            });
+        } finally {
+            setInvitationsLoading(false);
+        }
+    }, [distributorId, toast]);
 
     // Handle create merchant
     const handleCreateMerchant = useCallback(async () => {
@@ -271,8 +300,8 @@ export default function DistributorDashboard() {
             // Open merchant onboarding in a new tab
             const onboardingUrl = `/distributor/merchant-onboarding?merchantUserId=${merchantUserId}&merchantEmail=${encodeURIComponent(createMerchantForm.email)}&merchantPassword=${encodeURIComponent(providedPassword)}&merchantName=${encodeURIComponent(createMerchantForm.full_name)}&distributorId=${user.id}&merchantProfileId=${merchantProfileId}`;
             
-            // Open in new tab/window
-            window.open(onboardingUrl, '_blank', 'width=1200,height=800,scrollbars=yes');
+            // Open in new tab
+            window.open(onboardingUrl, '_blank');
             
             // Reset form
             setCreateMerchantForm({
@@ -608,6 +637,12 @@ export default function DistributorDashboard() {
             fetchTransactions();
         }
     }, [activeTab]);
+
+    useEffect(() => {
+        if (activeTab === 'invitations') {
+            fetchInvitations();
+        }
+    }, [activeTab, fetchInvitations]);
 
 
     const filteredMerchants = merchants.filter(m => {
@@ -1078,6 +1113,57 @@ PQR Shop,9123456789,pqr@example.com`}
                                     </CardContent>
                                 </Card>
                             )}
+
+                            {/* Invitations List */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Sent Invitations</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {invitationsLoading ? (
+                                        <div className="flex justify-center">
+                                            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                                        </div>
+                                    ) : invitationsList.length === 0 ? (
+                                        <p className="text-gray-500 text-center py-6">No invitations sent yet</p>
+                                    ) : (
+                                        <div className="overflow-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b">
+                                                        <th className="text-left py-3 px-4 font-semibold">Merchant Name</th>
+                                                        <th className="text-left py-3 px-4 font-semibold">Email</th>
+                                                        <th className="text-left py-3 px-4 font-semibold">Mobile</th>
+                                                        <th className="text-left py-3 px-4 font-semibold">Status</th>
+                                                        <th className="text-left py-3 px-4 font-semibold">Sent Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {invitationsList.map(invitation => (
+                                                        <tr key={invitation.id} className="hover:bg-gray-50">
+                                                            <td className="py-3 px-4 font-medium text-gray-900">{invitation.merchant_name}</td>
+                                                            <td className="py-3 px-4 text-gray-600">{invitation.merchant_email}</td>
+                                                            <td className="py-3 px-4 text-gray-600">{invitation.merchant_mobile}</td>
+                                                            <td className="py-3 px-4">
+                                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                                                    invitation.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                                                                    invitation.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                                                                    invitation.status === 'registered' ? 'bg-green-100 text-green-800' :
+                                                                    invitation.status === 'expired' ? 'bg-red-100 text-red-800' :
+                                                                    'bg-gray-100 text-gray-800'
+                                                                }`}>
+                                                                    {invitation.status.charAt(0).toUpperCase() + invitation.status.slice(1)}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-3 px-4 text-gray-600">{new Date(invitation.sent_at || invitation.created_at).toLocaleString()}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </div>
                     )}
 
