@@ -66,7 +66,7 @@ export const createNewTicket = async (req, res) => {
 
 export const createMerchantTicket = async (req, res) => {
   try {
-    const { merchant_id, title, description } = req.body;
+    const { merchant_id,module, title, description } = req.body;
 
     if (!merchant_id || !title || !description) {
       return res.status(400).json({
@@ -79,8 +79,9 @@ export const createMerchantTicket = async (req, res) => {
       .from("tickets")
       .insert([
         {
-          module: "merchant_onboarding",
-          title,
+         // module: "merchant_onboarding",
+         module,
+         title,
           description,
           priority: "medium",
           status: "open",
@@ -270,20 +271,96 @@ export const assignTicket = async (req, res) => {
 /* ========================================
    UPDATE STATUS (STRICT WORKFLOW + EMAIL)
 ======================================== */
+// export const updateTicketStatus = async (req, res) => {
+//   try {
+//     const { ticketId, status } = req.body;
+
+//     const { data: ticket } = await supabase
+//       .from("tickets")
+//       .select("*")
+//       .eq("id", ticketId)
+//       .single();
+
+//     if (!ticket) {
+//       return res.status(404).json({ message: "Ticket not found" });
+//     }
+
+//     const allowedTransitions = {
+//       open: ["assigned"],
+//       assigned: ["in_progress"],
+//       in_progress: ["resolved"],
+//       resolved: ["closed"],
+//       closed: [],
+//     };
+
+//     if (!allowedTransitions[ticket.status].includes(status)) {
+//       return res.status(400).json({
+//         message: `Invalid transition from ${ticket.status} to ${status}`,
+//       });
+//     }
+
+//     const { data: updated, error } = await supabase
+//       .from("tickets")
+//       .update({
+//         status,
+//         updated_at: new Date().toISOString(),
+//       })
+//       .eq("id", ticketId)
+//       .select()
+//       .single();
+
+//     if (error) throw error;
+
+//     // 🔹 Notify merchant on status change
+//     const { data: merchant } = await supabase
+//       .from("merchant_profiles")
+//       .select("email, full_name")
+//       .eq("user_id", ticket.created_by)
+//       .single();
+
+//     if (merchant?.email) {
+//       await sendEmail(
+//         merchant.email,
+//         "Your Ticket Status Has Been Updated",
+//         `
+//         <div style="font-family: Arial; padding: 20px;">
+//           <h2>Hello ${merchant.full_name || "Customer"},</h2>
+//           <p>Your ticket status has been updated.</p>
+//           <p><strong>New Status:</strong> ${status}</p>
+//           <br/>
+//           <p>SabbPe Support Team</p>
+//         </div>
+//         `
+//       );
+//     }
+
+//     res.json(updated);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 export const updateTicketStatus = async (req, res) => {
   try {
     const { ticketId, status } = req.body;
 
-    const { data: ticket } = await supabase
+    if (!ticketId || !status) {
+      return res.status(400).json({ message: "ticketId and status are required" });
+    }
+
+    const { data: ticket, error: fetchError } = await supabase
       .from("tickets")
       .select("*")
       .eq("id", ticketId)
       .single();
 
-    if (!ticket) {
+    if (fetchError || !ticket) {
       return res.status(404).json({ message: "Ticket not found" });
     }
 
+    const role = req.user.role;
+
+    // ✅ Lifecycle rules
     const allowedTransitions = {
       open: ["assigned"],
       assigned: ["in_progress"],
@@ -292,10 +369,23 @@ export const updateTicketStatus = async (req, res) => {
       closed: [],
     };
 
-    if (!allowedTransitions[ticket.status].includes(status)) {
+    if (!allowedTransitions[ticket.status]?.includes(status)) {
       return res.status(400).json({
         message: `Invalid transition from ${ticket.status} to ${status}`,
       });
+    }
+
+    // ✅ Role restrictions
+    if (status === "in_progress" && role !== "support") {
+      return res.status(403).json({ message: "Only support can start work" });
+    }
+
+    if (status === "resolved" && role !== "support") {
+      return res.status(403).json({ message: "Only support can resolve" });
+    }
+
+    if (status === "closed" && role !== "admin" && role !== "super_admin") {
+      return res.status(403).json({ message: "Only admin can close ticket" });
     }
 
     const { data: updated, error } = await supabase
@@ -310,35 +400,12 @@ export const updateTicketStatus = async (req, res) => {
 
     if (error) throw error;
 
-    // 🔹 Notify merchant on status change
-    const { data: merchant } = await supabase
-      .from("merchant_profiles")
-      .select("email, full_name")
-      .eq("user_id", ticket.created_by)
-      .single();
-
-    if (merchant?.email) {
-      await sendEmail(
-        merchant.email,
-        "Your Ticket Status Has Been Updated",
-        `
-        <div style="font-family: Arial; padding: 20px;">
-          <h2>Hello ${merchant.full_name || "Customer"},</h2>
-          <p>Your ticket status has been updated.</p>
-          <p><strong>New Status:</strong> ${status}</p>
-          <br/>
-          <p>SabbPe Support Team</p>
-        </div>
-        `
-      );
-    }
-
     res.json(updated);
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 /* ========================================
    DASHBOARD STATS
 ======================================== */
