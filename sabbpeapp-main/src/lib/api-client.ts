@@ -1,7 +1,21 @@
 import { supabase } from './supabase';
 import { MerchantFormData } from '@/schemas/merchantValidation';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
+// Ensure the API base URL always ends with '/api' regardless of how the
+// variable is provided.  We trim trailing slashes and drop any existing
+// "/api" suffix so the result is never ".../api/api".
+function computeApiBase(): string {
+    let raw = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    // strip trailing slashes
+    raw = raw.replace(/\/+$/, '');
+    // remove /api suffix if already present
+    raw = raw.replace(/\/api$/i, '');
+    return `${raw}/api`;
+}
+
+export const API_BASE_URL = computeApiBase();
 console.log('API_BASE_URL:', API_BASE_URL);
+
 class ApiClient {
     private async getAuthHeader(): Promise<HeadersInit> {
         const { data: { session } } = await supabase.auth.getSession();
@@ -16,9 +30,9 @@ class ApiClient {
     async submitMerchantApplication(data: MerchantFormData) {
         try {
             const headers = await this.getAuthHeader();
-            console.log('?? Calling API:', `/api/merchants/submit`);
+            console.log('?? Calling API:', `/merchants/submit`);
             console.log('?? Data:', data);
-            const response = await fetch(`${API_BASE_URL}/api/merchants/submit`, {
+            const response = await fetch(`${API_BASE_URL}/merchants/submit`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(data)

@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { API_BASE_URL } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -378,8 +379,7 @@ export default function DistributorDashboard() {
             }
 
             // Call backend API to send SMS invite
-            const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/api\/?$/, '');
-            const response = await fetch(`${apiUrl}/api/invites/bulk-send`, {
+            const response = await fetch(`${API_BASE_URL}/invites/bulk-send`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -524,8 +524,7 @@ export default function DistributorDashboard() {
                 return;
             }
 
-            const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/api\/?$/, '');
-            const response = await fetch(`${apiUrl}/api/invites/bulk-send`, {
+            const response = await fetch(`${API_BASE_URL}/invites/bulk-send`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -573,16 +572,18 @@ export default function DistributorDashboard() {
             if (!distributorId) return;
 
             setSavingPayout(true);
-            const { error } = await supabase.from('distributor_configs').upsert(
-                [
-                    {
-                        distributor_id: distributorId,
-                        config_type: 'payout',
-                        config_data: payoutForm,
-                    },
-                ],
-                { onConflict: 'distributor_id,config_type' }
-            );
+            const { error } = await (supabase as any)
+                .from('distributor_configs')
+                .upsert(
+                    [
+                        {
+                            distributor_id: distributorId,
+                            config_type: 'payout',
+                            config_data: payoutForm,
+                        },
+                    ],
+                    { onConflict: 'distributor_id,config_type' }
+                );
 
             if (error) throw error;
 
@@ -608,16 +609,18 @@ export default function DistributorDashboard() {
             if (!distributorId) return;
 
             setSavingAutopay(true);
-            const { error } = await supabase.from('distributor_configs').upsert(
-                [
-                    {
-                        distributor_id: distributorId,
-                        config_type: 'autopay',
-                        config_data: autopayForm,
-                    },
-                ],
-                { onConflict: 'distributor_id,config_type' }
-            );
+            const { error } = await (supabase as any)
+                .from('distributor_configs')
+                .upsert(
+                    [
+                        {
+                            distributor_id: distributorId,
+                            config_type: 'autopay',
+                            config_data: autopayForm,
+                        },
+                    ],
+                    { onConflict: 'distributor_id,config_type' }
+                );
 
             if (error) throw error;
 
@@ -643,16 +646,18 @@ export default function DistributorDashboard() {
             if (!distributorId) return;
 
             setSavingAadhaar(true);
-            const { error } = await supabase.from('distributor_configs').upsert(
-                [
-                    {
-                        distributor_id: distributorId,
-                        config_type: 'aadhaar',
-                        config_data: aadhaarForm,
-                    },
-                ],
-                { onConflict: 'distributor_id,config_type' }
-            );
+            const { error } = await (supabase as any)
+                .from('distributor_configs')
+                .upsert(
+                    [
+                        {
+                            distributor_id: distributorId,
+                            config_type: 'aadhaar',
+                            config_data: aadhaarForm,
+                        },
+                    ],
+                    { onConflict: 'distributor_id,config_type' }
+                );
 
             if (error) throw error;
 
@@ -1329,7 +1334,6 @@ PQR Shop,9123456789,pqr@example.com`}
                                                 <Button onClick={async () => {
                                                     try {
                                                         setAssigning(true);
-                                                        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
                                                         const { data: sessionData } = await supabase.auth.getSession();
                                                         const token = sessionData?.session?.access_token || '';
 
@@ -1340,7 +1344,7 @@ PQR Shop,9123456789,pqr@example.com`}
                                                             merchantId: assignForSelf ? undefined : assignMerchantId
                                                         };
 
-                                                        const resp = await fetch(`${apiUrl}/distributor/assign-product`, {
+                                                        const resp = await fetch(`${API_BASE_URL}/distributor/assign-product`, {
                                                             method: 'POST',
                                                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                                                             body: JSON.stringify(body)

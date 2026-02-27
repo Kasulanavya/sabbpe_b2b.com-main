@@ -234,8 +234,7 @@ export default function DistributorMerchantOnboarding() {
             console.log('📤 Submitting merchant onboarding to backend...');
 
             // Call backend endpoint to save all data (uses service role, bypasses RLS)
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-            const response = await fetch(`${apiUrl}/distributor/submit-merchant-onboarding`, {
+            const response = await fetch(`${API_BASE_URL}/distributor/submit-merchant-onboarding`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

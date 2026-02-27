@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Video, Mic, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useMerchantData } from '@/hooks/useMerchantData';
+import { API_BASE_URL } from '@/lib/api-client';
 
 interface FaceVoiceSyncProps {
   onSuccess?: () => void;
@@ -83,11 +84,8 @@ export const FaceVoiceSync: React.FC<FaceVoiceSyncProps> = ({ onSuccess, onFailu
         return;
       }
 
-      // determine API base (vite env or default backend)
-      const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8080/api';
-
-      // request backend to send OTP via WhatsApp
-      const resp = await fetch(`${API_BASE}/whatsapp/send-otp`, {
+      // use shared base URL helper (already ensures '/api' suffix)
+      const resp = await fetch(`${API_BASE_URL}/whatsapp/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to })
@@ -169,8 +167,7 @@ export const FaceVoiceSync: React.FC<FaceVoiceSyncProps> = ({ onSuccess, onFailu
 
         // call backend verify
         try {
-          const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8080/api';
-          const verifyResp = await fetch(`${API_BASE}/whatsapp/verify-otp`, {
+          const verifyResp = await fetch(`${API_BASE_URL}/whatsapp/verify-otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: to, otp: cleaned })
