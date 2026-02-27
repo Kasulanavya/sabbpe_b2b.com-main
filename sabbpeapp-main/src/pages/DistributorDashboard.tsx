@@ -13,12 +13,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Calendar, Users, CheckCircle, XCircle, MessageSquare, Settings, LogOut, Menu, X, Upload, CreditCard, Loader2 } from 'lucide-react';
 
 type PayoutConfig = {
+    minimum_payout_amount: number;
+    vpid: string;
+    notes: string;
+};
+
+type AutopayConfig = {
     settlement_frequency: string;
     minimum_payout_amount: number;
+    vpid: string;
     notes: string;
 };
 
 type AadhaarConfig = {
+    aadhaar_number: string;
     verification_level: string;
     notes: string;
 };
@@ -78,14 +86,24 @@ export default function DistributorDashboard() {
 
     // Payout config state
     const [payoutForm, setPayoutForm] = useState<PayoutConfig>({
-        settlement_frequency: 'daily',
         minimum_payout_amount: 0,
+        vpid: '',
         notes: '',
     });
     const [savingPayout, setSavingPayout] = useState(false);
 
+    // Autopay config state
+    const [autopayForm, setAutopayForm] = useState<AutopayConfig>({
+        settlement_frequency: 'daily',
+        minimum_payout_amount: 0,
+        vpid: '',
+        notes: '',
+    });
+    const [savingAutopay, setSavingAutopay] = useState(false);
+
     // Aadhaar config state
     const [aadhaarForm, setAadhaarForm] = useState<AadhaarConfig>({
+        aadhaar_number: '',
         verification_level: 'basic',
         notes: '',
     });
@@ -584,6 +602,41 @@ export default function DistributorDashboard() {
         }
     }, [payoutForm, distributorId, toast]);
 
+    // Handle autopay configuration
+    const handleSaveAutopayConfig = useCallback(async () => {
+        try {
+            if (!distributorId) return;
+
+            setSavingAutopay(true);
+            const { error } = await supabase.from('distributor_configs').upsert(
+                [
+                    {
+                        distributor_id: distributorId,
+                        config_type: 'autopay',
+                        config_data: autopayForm,
+                    },
+                ],
+                { onConflict: 'distributor_id,config_type' }
+            );
+
+            if (error) throw error;
+
+            toast({
+                title: 'Success',
+                description: 'Autopay configuration saved',
+            });
+        } catch (error) {
+            console.error('Error saving autopay config:', error);
+            toast({
+                title: 'Error',
+                description: getErrorMessage(error),
+                variant: 'destructive',
+            });
+        } finally {
+            setSavingAutopay(false);
+        }
+    }, [autopayForm, distributorId, toast]);
+
     // Handle Aadhaar configuration
     const handleSaveAadhaarConfig = useCallback(async () => {
         try {
@@ -703,7 +756,7 @@ export default function DistributorDashboard() {
         { id: 'create-merchant', label: 'Create Merchant', icon: 'users' },
         { id: 'transactions', label: 'Transactions', icon: 'credit-card' },
         { id: 'invitations', label: 'Invitations', icon: 'mail' },
-        { id: 'payments', label: 'Payment Products', icon: 'settings', hasSubmenu: true },
+        { id: 'payments', label: 'Product Payments', icon: 'settings', hasSubmenu: true },
         { id: 'settings', label: 'Settings', icon: 'settings' },
     ];
 
@@ -1212,7 +1265,7 @@ PQR Shop,9123456789,pqr@example.com`}
                         <div className="space-y-6">
                             <div>
                                 <h2 className="text-3xl font-bold text-gray-900">Payment Products</h2>
-                                <p className="text-gray-600">Configure payment settlement and Aadhaar verification</p>
+                                <p className="text-gray-600">Configure payment products and settlement settings</p>
                             </div>
 
                             {/* Products Catalog (quick actions) */}
@@ -1223,10 +1276,10 @@ PQR Shop,9123456789,pqr@example.com`}
                                 <CardContent>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {productsCatalog.map(p => (
-                                            <div key={p.id} className="p-4 border rounded-lg flex items-center justify-between">
+                                            <div key={p.id} className="p-4 border rounded-lg flex items-center justify-between hover:bg-gray-50 transition-colors">
                                                 <div>
-                                                    <div className="font-semibold">{p.name}</div>
-                                                    <div className="text-sm text-muted-foreground">Click to configure or assign</div>
+                                                    <div className="font-semibold text-gray-900">{p.name}</div>
+                                                    <div className="text-sm text-gray-600">Click to configure or assign</div>
                                                 </div>
                                                 <div>
                                                     <Button size="sm" onClick={() => { setActiveProduct(p.id); setAssignMerchantId(merchants[0]?.id || null); setAssignForSelf(false); }}>
@@ -1306,52 +1359,105 @@ PQR Shop,9123456789,pqr@example.com`}
                                                     } finally {
                                                         setAssigning(false);
                                                     }
-                                                }}>Assign</Button>
+                                                }} disabled={assigning}>
+                                                    {assigning ? 'Assigning...' : 'Assign'}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Payout Configuration */}
+                            {/* Payout Configuration - Combined Autopay & Payouts */}
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Payout Configuration</CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Settlement Frequency</label>
-                                        <Select value={payoutForm.settlement_frequency} onValueChange={(value) => setPayoutForm({ ...payoutForm, settlement_frequency: value })}>
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="daily">Daily</SelectItem>
-                                                <SelectItem value="weekly">Weekly</SelectItem>
-                                                <SelectItem value="monthly">Monthly</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                <CardContent className="space-y-8">
+                                    {/* Autopay (Collections) Section */}
+                                    <div className="border-b pb-6">
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Autopay (Collections)</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Settlement Frequency</label>
+                                                <Select value={autopayForm.settlement_frequency} onValueChange={(value) => setAutopayForm({ ...autopayForm, settlement_frequency: value })}>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="daily">Daily</SelectItem>
+                                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Debit Amount</label>
+                                                <Input
+                                                    type="number"
+                                                    value={autopayForm.minimum_payout_amount}
+                                                    onChange={(e) => setAutopayForm({ ...autopayForm, minimum_payout_amount: parseFloat(e.target.value) || 0 })}
+                                                    placeholder="Enter minimum payout amount"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">VPID</label>
+                                                <Input
+                                                    type="text"
+                                                    value={autopayForm.vpid}
+                                                    onChange={(e) => setAutopayForm({ ...autopayForm, vpid: e.target.value })}
+                                                    placeholder="Enter VPID"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                                                <Textarea
+                                                    value={autopayForm.notes}
+                                                    onChange={(e) => setAutopayForm({ ...autopayForm, notes: e.target.value })}
+                                                    placeholder="Any additional autopay notes..."
+                                                />
+                                            </div>
+                                            <Button onClick={handleSaveAutopayConfig} disabled={savingAutopay} className="w-full">
+                                                {savingAutopay ? 'Saving...' : 'Initiate Autopay'}
+                                            </Button>
+                                        </div>
                                     </div>
+
+                                    {/* Payouts (Settlements) Section */}
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Payout Amount</label>
-                                        <Input
-                                            type="number"
-                                            value={payoutForm.minimum_payout_amount}
-                                            onChange={(e) => setPayoutForm({ ...payoutForm, minimum_payout_amount: parseFloat(e.target.value) || 0 })}
-                                            placeholder="Enter minimum payout amount"
-                                        />
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Payouts (Settlements)</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Payout Amount</label>
+                                                <Input
+                                                    type="number"
+                                                    value={payoutForm.minimum_payout_amount}
+                                                    onChange={(e) => setPayoutForm({ ...payoutForm, minimum_payout_amount: parseFloat(e.target.value) || 0 })}
+                                                    placeholder="Enter minimum payout amount"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">VPID</label>
+                                                <Input
+                                                    type="text"
+                                                    value={payoutForm.vpid}
+                                                    onChange={(e) => setPayoutForm({ ...payoutForm, vpid: e.target.value })}
+                                                    placeholder="Enter VPID"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                                                <Textarea
+                                                    value={payoutForm.notes}
+                                                    onChange={(e) => setPayoutForm({ ...payoutForm, notes: e.target.value })}
+                                                    placeholder="Any additional payout notes..."
+                                                />
+                                            </div>
+                                            <Button onClick={handleSavePayoutConfig} disabled={savingPayout} className="w-full">
+                                                {savingPayout ? 'Saving...' : 'Initiate Payouts'}
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                                        <Textarea
-                                            value={payoutForm.notes}
-                                            onChange={(e) => setPayoutForm({ ...payoutForm, notes: e.target.value })}
-                                            placeholder="Any additional payout notes..."
-                                        />
-                                    </div>
-                                    <Button onClick={handleSavePayoutConfig} disabled={savingPayout} className="w-full">
-                                        {savingPayout ? 'Saving...' : 'Save Payout Configuration'}
-                                    </Button>
                                 </CardContent>
                             </Card>
 
@@ -1361,6 +1467,15 @@ PQR Shop,9123456789,pqr@example.com`}
                                     <CardTitle>Aadhaar Configuration</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Aadhaar Number(to verify)</label>
+                                        <Input
+                                            type="text"
+                                            value={aadhaarForm.aadhaar_number}
+                                            onChange={(e) => setAadhaarForm({ ...aadhaarForm, aadhaar_number: e.target.value })}
+                                            placeholder="Enter Aadhaar number"
+                                        />
+                                    </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Verification Level</label>
                                         <Select value={aadhaarForm.verification_level} onValueChange={(value) => setAadhaarForm({ ...aadhaarForm, verification_level: value })}>
@@ -1384,7 +1499,7 @@ PQR Shop,9123456789,pqr@example.com`}
                                         />
                                     </div>
                                     <Button onClick={handleSaveAadhaarConfig} disabled={savingAadhaar} className="w-full">
-                                        {savingAadhaar ? 'Saving...' : 'Save Aadhaar Configuration'}
+                                        {savingAadhaar ? 'Saving...' : 'Initiate Aadhaar Verification'}
                                     </Button>
                                 </CardContent>
                             </Card>
