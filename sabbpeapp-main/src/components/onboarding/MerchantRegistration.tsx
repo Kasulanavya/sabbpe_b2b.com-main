@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useMerchantData } from '@/hooks/useMerchantData';
-
+import { RaiseTicketButton } from '../RaiseTicketButton';
 import {
     Upload,
     FileText,
@@ -1235,6 +1235,10 @@ const MerchantRegistration: React.FC<MerchantRegistrationProps> = ({
                 <Button variant="outline" className="px-8" onClick={onPrev}>
                     Back
                 </Button>
+                <RaiseTicketButton
+   module="merchant_onboarding"
+   referenceId={merchantProfile?.id as string}
+/>
                 <Button
                     className="px-8"
                     onClick={onNext}
@@ -1250,7 +1254,9 @@ const MerchantRegistration: React.FC<MerchantRegistrationProps> = ({
                         aadhaarDocument.uploadStatus !== 'success' ||
                         !businessProof
                     }
+                    
                 >
+                 
                     Continue to KYC
                 </Button>
             </div>

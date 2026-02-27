@@ -397,8 +397,12 @@ export const updateTicketStatus = async (req, res) => {
       .eq("id", ticketId)
       .select()
       .single();
+      
+      
+      
 
     if (error) throw error;
+  
 
     res.json(updated);
 
