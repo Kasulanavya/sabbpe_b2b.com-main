@@ -12,6 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, Users, CheckCircle, XCircle, MessageSquare, Settings, LogOut, Menu, X, Upload, CreditCard, Loader2 } from 'lucide-react';
+// xlsx is used for parsing Excel files. types are not installed so use ts-ignore
+// @ts-ignore
+import * as XLSX from 'xlsx';
 
 type PayoutConfig = {
     minimum_payout_amount: number;
@@ -426,29 +429,30 @@ export default function DistributorDashboard() {
     }, [inviteData, activeTab, fetchInvitations, toast]);
 
     // Handle bulk invite
-    // Handle CSV file selection
-    const handleCSVFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    // Handle file selection (CSV or Excel)
+    const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            if (!file.name.endsWith('.csv')) {
+            const name = file.name.toLowerCase();
+            if (name.endsWith('.csv') || name.endsWith('.xlsx') || name.endsWith('.xls')) {
+                setBulkInviteCSVFile(file);
+            } else {
                 toast({
                     title: 'Error',
-                    description: 'Please select a CSV file',
+                    description: 'Please select a CSV or Excel file (.xlsx/.xls)',
                     variant: 'destructive',
                 });
-                return;
             }
-            setBulkInviteCSVFile(file);
         }
     }, [toast]);
 
-    // Parse CSV file and create merchants
+    // Parse uploaded file (CSV or Excel) and send invites
     const handleBulkInvite = useCallback(async () => {
         try {
             if (!bulkInviteCSVFile) {
                 toast({
                     title: 'Error',
-                    description: 'Please select a CSV file',
+                    description: 'Please select a file',
                     variant: 'destructive',
                 });
                 return;
@@ -456,22 +460,38 @@ export default function DistributorDashboard() {
 
             setBulkInviteSending(true);
 
-            // Read and parse CSV file
-            const text = await bulkInviteCSVFile.text();
-            const lines = text.trim().split('\n').filter(l => l.trim());
+            // utility to parse either CSV or Excel into an array of arrays
+            const parseFile = async (file: File): Promise<string[][]> => {
+                const name = file.name.toLowerCase();
+                if (name.endsWith('.csv')) {
+                    const text = await file.text();
+                    return text
+                        .trim()
+                        .split('\n')
+                        .filter(l => l.trim())
+                        .map(l => l.split(',').map(c => c.trim()));
+                } else {
+                    // Excel
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(buffer, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    return XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+                }
+            };
 
-            if (lines.length < 2) {
+            const rows = await parseFile(bulkInviteCSVFile);
+            if (rows.length < 2) {
                 toast({
                     title: 'Error',
-                    description: 'CSV must have header row and at least one data row',
+                    description: 'File must have a header row and at least one data row',
                     variant: 'destructive',
                 });
                 setBulkInviteSending(false);
                 return;
             }
 
-            // Parse header
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            // header detection
+            const headers = rows[0].map(h => String(h).trim().toLowerCase());
             const nameIndex = headers.findIndex(h => h.includes('name') || h.includes('merchant'));
             const mobileIndex = headers.findIndex(h => h.includes('mobile') || h.includes('phone'));
             const emailIndex = headers.findIndex(h => h.includes('email'));
@@ -479,31 +499,38 @@ export default function DistributorDashboard() {
             if (nameIndex === -1 || mobileIndex === -1 || emailIndex === -1) {
                 toast({
                     title: 'Error',
-                    description: 'CSV must contain columns: merchant_name, merchant_mobile, merchant_email',
+                    description: 'File must contain columns: merchant_name, merchant_mobile, merchant_email',
                     variant: 'destructive',
                 });
                 setBulkInviteSending(false);
                 return;
             }
 
-            // Parse data rows
-            const merchants = lines
+            const merchants = rows
                 .slice(1)
-                .map((line, idx) => {
-                    const cols = line.split(',').map(c => c.trim());
-                    return {
-                        fullName: cols[nameIndex]?.trim() || '',
-                        mobileNumber: cols[mobileIndex]?.trim() || '',
-                        email: cols[emailIndex]?.trim() || '',
-                        rowIndex: idx + 2 // Line number in file (accounting for header)
-                    };
-                })
+                .map((cols, idx) => ({
+                    fullName: String(cols[nameIndex] || '').trim(),
+                    mobileNumber: String(cols[mobileIndex] || '').trim(),
+                    email: String(cols[emailIndex] || '').trim(),
+                    rowIndex: idx + 2,
+                }))
                 .filter(m => m.fullName && m.mobileNumber && m.email);
 
             if (merchants.length === 0) {
                 toast({
                     title: 'Error',
-                    description: 'No valid merchants found in CSV',
+                    description: 'No valid merchants found in file',
+                    variant: 'destructive',
+                });
+                setBulkInviteSending(false);
+                return;
+            }
+
+            // enforce maximum 10 invites
+            if (merchants.length > 10) {
+                toast({
+                    title: 'Error',
+                    description: 'You can send at most 10 invitations at a time',
                     variant: 'destructive',
                 });
                 setBulkInviteSending(false);
@@ -1130,12 +1157,12 @@ export default function DistributorDashboard() {
                             {bulkInviteOpen && (
                                 <Card>
                                     <CardHeader>
-                                        <CardTitle>Bulk Invite Merchants via CSV</CardTitle>
+                                        <CardTitle>Bulk Invite Merchants via CSV/Excel</CardTitle>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-4">
-                                                Upload CSV File with Merchant Details
+                                                Upload CSV or Excel file with merchant details (max 10 rows)
                                             </label>
                                             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition">
                                                 <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
@@ -1146,8 +1173,8 @@ export default function DistributorDashboard() {
                                                         </span>
                                                         <input
                                                             type="file"
-                                                            accept=".csv"
-                                                            onChange={handleCSVFileChange}
+                                                            accept=".csv,.xlsx,.xls"
+                                                            onChange={handleFileChange}
                                                             className="hidden"
                                                         />
                                                     </label>

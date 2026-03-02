@@ -76,6 +76,15 @@ router.post(
                 return;
             }
 
+            // limit for bulk invites
+            if (merchants.length > 10) {
+                res.status(400).json({
+                    success: false,
+                    error: { message: 'Cannot send more than 10 invitations at once' }
+                });
+                return;
+            }
+
             // Verify distributor via JWT
             const authHeader = req.headers.authorization;
             if (!authHeader?.startsWith('Bearer ')) {
