@@ -15,7 +15,6 @@ import {
 } from "recharts";
 
 export const AdminDashboard: React.FC = () => {
-  const [hasNewMessage, setHasNewMessage] = useState(false);
   const { token } = useSupportAuth();
   const [stats, setStats] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
